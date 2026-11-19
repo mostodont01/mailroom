@@ -1,0 +1,28 @@
+[project]
+name = "mailroom"
+version = "0.1.0"
+description = "Sort and clean up a Gmail account: category labels via Claude, filters for new mail, safe trashing."
+readme = "README.md"
+authors = [
+    { name = "mostodont01", email = "otoskypala0@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "google-api-python-client>=2.202.0",
+    "google-auth-oauthlib>=1.5.0",
+]
+
+[project.scripts]
+mailroom = "mailroom:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["tests"]
