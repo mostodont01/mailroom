@@ -24,6 +24,14 @@ def _gmail():
     return Gmail(service())
 
 
+def _skip(text: str) -> tuple[str, ...]:
+    names = tuple(s.strip() for s in text.split(",") if s.strip())
+    bad = [n for n in names if n not in sort.CATEGORIES]
+    if bad:
+        raise SystemExit(f"unknown categories: {', '.join(bad)}")
+    return names
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="mailroom", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -46,6 +54,8 @@ def main(argv=None) -> int:
         s = sub.add_parser(name)
         s.add_argument("--dry-run", action="store_true")
         s.add_argument("--prefix", default="", help="label name prefix, e.g. 'Sorted/'")
+        s.add_argument("--skip", default="Other",
+                       help="comma-separated categories without a label (e.g. ones Gmail's tabs cover)")
     s = sub.add_parser("trash")
     s.add_argument("-c", "--category")
     s.add_argument("-f", "--sender", help="address or domain")
@@ -84,11 +94,13 @@ def main(argv=None) -> int:
         store.set_sender(a.sender.lower(), a.category, "user")
         print(f"{a.sender} -> {a.category}")
     elif a.cmd == "label":
-        counts = sort.apply_labels(store, None if a.dry_run else _gmail(), a.prefix, dry_run=a.dry_run)
+        counts = sort.apply_labels(store, None if a.dry_run else _gmail(), a.prefix,
+                                  skip=_skip(a.skip), dry_run=a.dry_run)
         for cat, n in sorted(counts.items()):
             print(f"{cat:<14} {n:>6}{' (dry run)' if a.dry_run else ''}")
     elif a.cmd == "filters":
-        n = sort.sync_filters(store, None if a.dry_run else _gmail(), a.prefix, dry_run=a.dry_run)
+        n = sort.sync_filters(store, None if a.dry_run else _gmail(), a.prefix,
+                              skip=_skip(a.skip), dry_run=a.dry_run)
         print(f"{n} filters{' would be made (dry run)' if a.dry_run else ' in Gmail'}")
     elif a.cmd == "trash":
         try:

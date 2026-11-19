@@ -226,3 +226,17 @@ def test_claude_usage_guard():
 def test_own_address_not_sent_to_claude(setup):
     _, store = setup
     assert store.senders()["me@example.com"] == ("Other", "self")
+
+
+def test_cli_label_skip(setup, monkeypatch, capsys, tmp_path):
+    fake, store = setup
+    sort.classify_senders(store, fake_runner(SENDERS, MIXED), log=lambda *_: None)
+    sort.classify_mixed(store, fake_runner(SENDERS, MIXED), log=lambda *_: None)
+    monkeypatch.setattr("mailroom.paths.database", lambda: tmp_path / "mail.db")
+    monkeypatch.setattr("mailroom.cli._gmail", lambda: Gmail(fake, pause=0))
+    assert main(["label", "--skip", "Promotions,Other"]) == 0
+    assert "Promotions" not in fake.label_names and "Purchases" in fake.label_names
+    assert main(["filters", "--skip", "Promotions,Other"]) == 0
+    assert all("shop.cz" not in f["criteria"]["from"] for f in fake.filters_.values())
+    with pytest.raises(SystemExit):
+        main(["label", "--skip", "Nope"])
