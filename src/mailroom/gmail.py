@@ -16,7 +16,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.settings.basic",
 ]
 HEADERS = ["From", "Subject", "Date", "List-Unsubscribe"]
-BATCH = 50          # requests per HTTP batch (Google recommends <= 50)
+BATCH = 20          # requests per HTTP batch: 20 x 5 units, well under the per-minute user quota
+PACE = 0.6          # s between batches (~10,000 units/min; the limit is 15,000)
 MODIFY_CHUNK = 1000  # ids per batchModify call (API maximum)
 
 
@@ -70,7 +71,7 @@ class Gmail:
     """The handful of calls mailroom needs. `svc` is a googleapiclient
     resource (or a fake with the same shape in tests)."""
 
-    def __init__(self, svc, pause: float = 0.0):
+    def __init__(self, svc, pause: float = PACE):
         self.svc = svc
         self.pause = pause  # between batches, to stay under the per-user quota
 
@@ -91,7 +92,7 @@ class Gmail:
                 return
 
     def get_metadata(self, ids: list[str], on_batch: Callable[[list[dict]], None] | None = None,
-                     retries: int = 5) -> list[dict]:
+                     retries: int = 8, sleep=time.sleep) -> list[dict]:
         """Metadata (headers, size, labels, snippet) for many ids, in HTTP batches.
         Rate-limited ones are retried with backoff."""
         out: list[dict] = []
@@ -121,12 +122,13 @@ class Gmail:
                 if attempt == retries:
                     raise RuntimeError(f"{len(failed)} messages kept failing (rate limit?)")
                 todo = failed
-                time.sleep(min(2 ** attempt, 30))
+                # the quota is per minute: back off long enough for it to refill
+                sleep(min(10 * 2 ** attempt, 65))
             out.extend(got)
             if on_batch:
                 on_batch(got)
             if self.pause:
-                time.sleep(self.pause)
+                sleep(self.pause)
         return out
 
     def labels(self) -> dict[str, str]:

@@ -37,7 +37,7 @@ def setup(mail, tmp_path, monkeypatch):
     monkeypatch.setenv("MAILROOM_CONFIG", str(tmp_path / "cfg"))
     fake = FakeGmail(mail)
     store = Store(tmp_path / "mail.db")
-    sync(store, Gmail(fake), log=lambda *_: None)
+    sync(store, Gmail(fake, pause=0), log=lambda *_: None)
     return fake, store
 
 
@@ -75,17 +75,18 @@ def test_sync_is_incremental_and_drops_deleted(setup, mail):
     assert len(store.known_ids()) == 8
     fake.msgs["n1"] = message("n1", "x@y.cz", "new")
     del fake.msgs["f1"]
-    added, gone = sync(store, Gmail(fake), log=lambda *_: None)
+    added, gone = sync(store, Gmail(fake, pause=0), log=lambda *_: None)
     assert (added, gone) == (1, 1)
     assert "n1" in store.known_ids() and "f1" not in store.known_ids()
 
 
-def test_batch_retries_rate_limited(mail, monkeypatch):
-    monkeypatch.setattr("time.sleep", lambda s: None)
+def test_batch_retries_rate_limited(mail):
     fake = FakeGmail(mail)
     fake.fail_once = {"a1", "g2"}
-    got = Gmail(fake).get_metadata(list(fake.msgs))
+    slept = []
+    got = Gmail(fake, pause=0).get_metadata(list(fake.msgs), sleep=slept.append)
     assert sorted(m["id"] for m in got) == sorted(fake.msgs)
+    assert slept == [10]  # one back-off, long enough for the per-minute quota
 
 
 def test_classify_senders_then_mixed(setup):
@@ -132,7 +133,7 @@ def test_new_mail_inherits_sender_category(setup):
     fake, store = setup
     sort.classify_senders(store, fake_runner(SENDERS), log=lambda *_: None)
     fake.msgs["g3"] = message("g3", "GitHub <noreply@github.com>", "[vl] new issue")
-    sync(store, Gmail(fake), log=lambda *_: None)
+    sync(store, Gmail(fake, pause=0), log=lambda *_: None)
     assert store.messages("id = 'g3'")[0]["category"] == "Notifications"
 
 
